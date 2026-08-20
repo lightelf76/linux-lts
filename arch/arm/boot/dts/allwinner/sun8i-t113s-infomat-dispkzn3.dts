@@ -96,19 +96,22 @@
 		reg = <0x50>;
 		pagesize = <16>;
 		vcc-supply = <&reg_vcc3v3>;
-
+/*
 		#address-cells = <1>;
 		#size-cells = <1>;
 
 		eth0_macaddress: macaddress@fa {
 			reg = <0xfa 0x06>;
 		};
+*/
 	};
 };
 
 &emac {
+/*
 	nvmem-cells = <&eth0_macaddress>;
 	nvmem-cell-names = "mac-address";
+*/
 	pinctrl-0 = <&rmii_pe_pins>;
 	pinctrl-names = "default";
 	phy-handle = <&ext_rmii_phy>;
