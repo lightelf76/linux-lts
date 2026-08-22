@@ -62,10 +62,50 @@
 		regulator-max-microvolt = <5000000>;
 		regulator-boot-on;
 		enable-active-high;
-		gpio = <&pio 7 6 GPIO_ACTIVE_HIGH>;
+		gpio = <&pio 6 12 GPIO_ACTIVE_HIGH>;
 		status = "disabled";
 	};
 
+	panel: panel {
+		compatible = "bananapi,s070wv20-ct16";
+		power-supply = <&reg_vcc3v3>;
+		backlight = <&backlight>;
+
+		port {
+			panel_input: endpoint {
+				remote-endpoint = <&tcon0_out_lcd>;
+			};
+		};
+	};
+
+	backlight: backlight {
+		compatible = "pwm-backlight";
+		pwms = <&pwm 7 500000 PWM_POLARITY_NORMAL>;
+		brightness-levels = <0 10 20 30 40 50 60 70 80 90 100>;
+		default-brightness-level = <7>;
+		enable-gpios = <&pio 3 22 GPIO_ACTIVE_HIGH>; /* PD22 */
+	};
+};
+
+&be0 {
+	status = "okay";
+};
+
+&de {
+	status = "okay";
+};
+
+&tcon0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&lcd_rgb666_pins>;
+	status = "okay";
+};
+
+&tcon0_out {
+	tcon0_out_lcd: endpoint@0 {
+		reg = <0>;
+		remote-endpoint = <&panel_input>;
+	};
 };
 
 &dcxo {
@@ -132,10 +172,6 @@
 	pinctrl-names = "default";
 	vmmc-supply = <&reg_vcc3v3>;
 	non-removable;
-	/*
-	cd-gpios = <&pio 5 6 GPIO_ACTIVE_LOW>;
-	disable-wp;
-	*/
 	bus-width = <4>;
 	status = "okay";
 };
