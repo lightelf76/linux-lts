@@ -51,7 +51,6 @@
 		regulator-min-microvolt = <5000000>;
 		regulator-max-microvolt = <5000000>;
 		enable-active-high;
-		gpio = <&pio 1 9 GPIO_ACTIVE_HIGH>;
 		status = "disabled";
 	};
 
@@ -62,7 +61,6 @@
 		regulator-max-microvolt = <5000000>;
 		regulator-boot-on;
 		enable-active-high;
-		gpio = <&pio 6 12 GPIO_ACTIVE_HIGH>;
 		status = "disabled";
 	};
 
@@ -83,11 +81,10 @@
 		pwms = <&pwm 7 500000 PWM_POLARITY_NORMAL>;
 		brightness-levels = <0 10 20 30 40 50 60 70 80 90 100>;
 		default-brightness-level = <7>;
-		enable-gpios = <&pio 3 22 GPIO_ACTIVE_HIGH>; /* PD22 */
 	};
 };
 
-&be0 {
+&mixer0 {
 	status = "okay";
 };
 
@@ -95,17 +92,21 @@
 	status = "okay";
 };
 
-&tcon0 {
+&tcon_lcd0 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&lcd_rgb666_pins>;
 	status = "okay";
 };
 
-&tcon0_out {
+&tcon_lcd0_out {
 	tcon0_out_lcd: endpoint@0 {
 		reg = <0>;
 		remote-endpoint = <&panel_input>;
 	};
+};
+
+&pwm {
+	status = "okay";
 };
 
 &dcxo {
