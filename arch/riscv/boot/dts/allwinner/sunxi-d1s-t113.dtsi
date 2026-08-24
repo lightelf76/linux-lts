@@ -212,6 +212,145 @@
 				pins = "PB6", "PB7";
 				function = "uart3";
 			};
+
+			/omit-if-no-ref/
+			pwm0_pb_pin: pwm0-pb-pin {
+				pins = "PB5";
+				function = "pwm0";
+			};
+
+			/omit-if-no-ref/
+			pwm0_pd_pin: pwm0-pd-pin {
+				pins = "PD16";
+				function = "pwm0";
+			};
+
+			/omit-if-no-ref/
+			pwm0_pg_pin: pwm0-pg-pin {
+				pins = "PG12";
+				function = "pwm0";
+			};
+
+			/omit-if-no-ref/
+			pwm1_pb_pin: pwm1-pb-pin {
+				pins = "PB6";
+				function = "pwm1";
+			};
+
+			/omit-if-no-ref/
+			pwm1_pd_pin: pwm1-pd-pin {
+				pins = "PD17";
+				function = "pwm1";
+			};
+
+			/omit-if-no-ref/
+			pwm1_pg_pin: pwm1-pg-pin {
+				pins = "PG6";
+				function = "pwm1";
+			};
+
+			/omit-if-no-ref/
+			pwm2_pd_pin: pwm2-pd-pin {
+				pins = "PD18";
+				function = "pwm2";
+			};
+
+			/omit-if-no-ref/
+			pwm2_pe_pin: pwm2-pe-pin {
+				pins = "PE8";
+				function = "pwm2";
+			};
+
+			/omit-if-no-ref/
+			pwm2_pg_pin: pwm2-pg-pin {
+				pins = "PG13";
+				function = "pwm2";
+			};
+
+			/omit-if-no-ref/
+			pwm3_pd_pin: pwm3-pd-pin {
+				pins = "PD19";
+				function = "pwm3";
+			};
+
+			/omit-if-no-ref/
+			pwm3_pe_pin: pwm3-pe-pin {
+				pins = "PE9";
+				function = "pwm3";
+			};
+
+			/omit-if-no-ref/
+			pwm3_pg_pin: pwm3-pg-pin {
+				pins = "PG10";
+				function = "pwm3";
+			};
+
+			/omit-if-no-ref/
+			pwm4_pd_pin: pwm4-pd-pin {
+				pins = "PD20";
+				function = "pwm4";
+			};
+
+			/omit-if-no-ref/
+			pwm4_pe_pin: pwm4-pe-pin {
+				pins = "PE10";
+				function = "pwm4";
+			};
+
+			/omit-if-no-ref/
+			pwm4_pg_pin: pwm4-pg-pin {
+				pins = "PG5";
+				function = "pwm4";
+			};
+
+			/omit-if-no-ref/
+			pwm5_pd_pin: pwm5-pd-pin {
+				pins = "PD21";
+				function = "pwm5";
+			};
+
+			/omit-if-no-ref/
+			pwm5_pf_pin: pwm5-pf-pin {
+				pins = "PF6";
+				function = "pwm5";
+			};
+
+			/omit-if-no-ref/
+			pwm5_pg_pin: pwm5-pg-pin {
+				pins = "PG4";
+				function = "pwm5";
+			};
+
+			/omit-if-no-ref/
+			pwm6_pd_pin: pwm6-pd-pin {
+				pins = "PD9";
+				function = "pwm6";
+			};
+
+			/omit-if-no-ref/
+			pwm6_pf_pin: pwm6-pf-pin {
+				pins = "PF4";
+				function = "pwm6";
+			};
+
+			/omit-if-no-ref/
+			pwm6_pg_pin: pwm6-pg-pin {
+				pins = "PG1";
+				function = "pwm6";
+			};
+
+			/omit-if-no-ref/
+			pwm7_pd_pin: pwm7-pd-pin {
+				pins = "PD22";
+				function = "pwm7";
+			};
+
+			/omit-if-no-ref/
+			pwm7_pg_pin: pwm7-pg-pin {
+				pins = "PG0";
+				function = "pwm7";
+			};
+
 		};
 
 		pwm: pwm@2000c00 {

@@ -107,6 +107,8 @@
 };
 
 &pwm {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pwm7_pd_pin>;
 	status = "okay";
 };
 
