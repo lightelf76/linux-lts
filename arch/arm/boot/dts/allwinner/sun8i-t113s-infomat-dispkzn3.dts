@@ -152,7 +152,7 @@
 };
 
 &ledc {
-	pinctrl-0 = <&ledc_pg_pins>;
+	pinctrl-0 = <&ledc_pg_pin>;
 	pinctrl-names = "default";
 	status = "okay";
 };
