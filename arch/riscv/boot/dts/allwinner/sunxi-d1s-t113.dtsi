@@ -351,6 +351,18 @@
 				function = "pwm7";
 			};
 
+			/omit-if-no-ref/
+			ledc_pe_pin: ledc-pe-pin {
+				pins = "PE5";
+				function = "ledc";
+			};
+
+			/omit-if-no-ref/
+			ledc_pg_pin: ledc-pg-pin {
+				pins = "PG13";
+				function = "ledc";
+			};
+
 		};
 
 		pwm: pwm@2000c00 {

@@ -151,6 +151,12 @@
 	};
 };
 
+&ledc {
+	pinctrl-0 = <&ledc_pg_pins>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
 &emac {
 /*
 	nvmem-cells = <&eth0_macaddress>;
