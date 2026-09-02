@@ -25,6 +25,7 @@
 		compatible = "allwinner,sun20i-d1-display-engine";
 		allwinner,pipelines = <&mixer0>, <&mixer1>;
 		status = "disabled";
+		iommus = <&iommu 2>;
 	};
 
 	soc {
@@ -938,7 +939,6 @@
 				 <&display_clocks CLK_MIXER0>;
 			clock-names = "bus", "mod";
 			resets = <&display_clocks RST_MIXER0>;
-			iommus = <&iommu 2>;
 
 			ports {
 				#address-cells = <1>;
@@ -961,7 +961,6 @@
 				 <&display_clocks CLK_MIXER1>;
 			clock-names = "bus", "mod";
 			resets = <&display_clocks RST_MIXER1>;
-			iommus = <&iommu 2>;
 
 			ports {
 				#address-cells = <1>;
