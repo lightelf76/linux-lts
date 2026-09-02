@@ -425,7 +425,7 @@
 			nvmem-cell-names = "calibration";
 			#thermal-sensor-cells = <0>;
 		};
-		iommu: iommu at 2010000 {
+		iommu: iommu@2010000 {
 			compatible = "allwinner,sun20i-d1-iommu";
 			reg = <0x2010000 0x10000>;
 			interrupts = <SOC_PERIPHERAL_IRQ(64) IRQ_TYPE_LEVEL_HIGH>;
