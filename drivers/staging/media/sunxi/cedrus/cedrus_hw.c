@@ -274,7 +274,7 @@ int cedrus_hw_probe(struct cedrus_dev *dev)
 	}
 
 	ret = sunxi_sram_claim(dev->dev);
-	if (ret) {
+	if (ret && ret != -ENOENT) {
 		dev_err(dev->dev, "Failed to claim SRAM\n");
 
 		goto err_mem;

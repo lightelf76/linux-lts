@@ -25,6 +25,7 @@
 		compatible = "allwinner,sun20i-d1-display-engine";
 		allwinner,pipelines = <&mixer0>, <&mixer1>;
 		status = "disabled";
+		iommus = <&iommu 2>;
 	};
 
 	soc {
@@ -33,6 +34,18 @@
 		dma-noncoherent;
 		#address-cells = <1>;
 		#size-cells = <1>;
+
+		ve: video-codec@1c0e000 {
+			compatible = "allwinner,sun20i-d1-video-engine";
+			reg = <0x1c0e000 0x2000>;
+			interrupts = <SOC_PERIPHERAL_IRQ(66) IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&ccu CLK_BUS_VE>,
+				 <&ccu CLK_VE>,
+				 <&ccu CLK_MBUS_VE>;
+			clock-names = "ahb", "mod", "ram";
+			resets = <&ccu RST_BUS_VE>;
+			iommus = <&iommu 0>;
+		};
 
 		pio: pinctrl@2000000 {
 			compatible = "allwinner,sun20i-d1-pinctrl";
@@ -85,8 +98,20 @@
 			};
 
 			/omit-if-no-ref/
+			i2c2_pe_pins: i2c2-pe-pins {
+				pins = "PE12", "PE13";
+				function = "i2c2";
+			};
+
+			/omit-if-no-ref/
 			i2c3_pg_pins: i2c3-pg-pins {
 				pins = "PG10", "PG11";
+				function = "i2c3";
+			};
+
+			/omit-if-no-ref/
+			i2c3_pb_pins: i2c3-pb-pins {
+				pins = "PB6", "PB7";
 				function = "i2c3";
 			};
 
@@ -106,6 +131,15 @@
 			i2s1_dout0_pin: i2s1-dout0-pin {
 				pins = "PG15";
 				function = "i2s1_dout";
+			};
+
+			/omit-if-no-ref/
+			lcd_lvds0_pins: lcd-lvds0-pins {
+				pins = "PD0", "PD1", "PD2", "PD3", "PD4", "PD5",
+				       "PD6", "PD7", "PD8", "PD9";
+				function = "lvds0";
+				drive-strength = <30>;
+				bias-disable;
 			};
 
 			/omit-if-no-ref/
@@ -175,6 +209,12 @@
 			};
 
 			/omit-if-no-ref/
+			uart1_pe_pins: uart1-pe-pins {
+				pins = "PE10", "PE11";
+				function = "uart1";
+			};
+
+			/omit-if-no-ref/
 			uart1_pg6_pins: uart1-pg6-pins {
 				pins = "PG6", "PG7";
 				function = "uart1";
@@ -191,6 +231,182 @@
 				pins = "PB6", "PB7";
 				function = "uart3";
 			};
+
+			/omit-if-no-ref/
+			uart4_pb_pins: uart4-pb-pins {
+				pins = "PB2", "PB3";
+				function = "uart4";
+			};
+
+			/omit-if-no-ref/
+			uart5_pb_pins: uart5-pb-pins {
+				pins = "PB4", "PB5";
+				function = "uart5";
+			};
+
+			/omit-if-no-ref/
+			ledc_pe_pin: ledc-pe-pin {
+				pins = "PE5";
+				function = "ledc";
+			};
+
+			/omit-if-no-ref/
+			ledc_pg_pin: ledc-pg-pin {
+				pins = "PG13";
+				function = "ledc";
+			};
+
+			/omit-if-no-ref/
+			pwm0_pb_pin: pwm0-pb-pin {
+				pins = "PB5";
+				function = "pwm0";
+			};
+
+			/omit-if-no-ref/
+			pwm0_pd_pin: pwm0-pd-pin {
+				pins = "PD16";
+				function = "pwm0";
+			};
+
+			/omit-if-no-ref/
+			pwm0_pg_pin: pwm0-pg-pin {
+				pins = "PG12";
+				function = "pwm0";
+			};
+
+			/omit-if-no-ref/
+			pwm1_pb_pin: pwm1-pb-pin {
+				pins = "PB6";
+				function = "pwm1";
+			};
+
+			/omit-if-no-ref/
+			pwm1_pd_pin: pwm1-pd-pin {
+				pins = "PD17";
+				function = "pwm1";
+			};
+
+			/omit-if-no-ref/
+			pwm1_pg_pin: pwm1-pg-pin {
+				pins = "PG6";
+				function = "pwm1";
+			};
+
+			/omit-if-no-ref/
+			pwm2_pd_pin: pwm2-pd-pin {
+				pins = "PD18";
+				function = "pwm2";
+			};
+
+			/omit-if-no-ref/
+			pwm2_pe_pin: pwm2-pe-pin {
+				pins = "PE8";
+				function = "pwm2";
+			};
+
+			/omit-if-no-ref/
+			pwm2_pg_pin: pwm2-pg-pin {
+				pins = "PG13";
+				function = "pwm2";
+			};
+
+			/omit-if-no-ref/
+			pwm3_pd_pin: pwm3-pd-pin {
+				pins = "PD19";
+				function = "pwm3";
+			};
+
+			/omit-if-no-ref/
+			pwm3_pe_pin: pwm3-pe-pin {
+				pins = "PE9";
+				function = "pwm3";
+			};
+
+			/omit-if-no-ref/
+			pwm3_pg_pin: pwm3-pg-pin {
+				pins = "PG10";
+				function = "pwm3";
+			};
+
+			/omit-if-no-ref/
+			pwm4_pd_pin: pwm4-pd-pin {
+				pins = "PD20";
+				function = "pwm4";
+			};
+
+			/omit-if-no-ref/
+			pwm4_pe_pin: pwm4-pe-pin {
+				pins = "PE10";
+				function = "pwm4";
+			};
+
+			/omit-if-no-ref/
+			pwm4_pg_pin: pwm4-pg-pin {
+				pins = "PG5";
+				function = "pwm4";
+			};
+
+			/omit-if-no-ref/
+			pwm5_pd_pin: pwm5-pd-pin {
+				pins = "PD21";
+				function = "pwm5";
+			};
+
+			/omit-if-no-ref/
+			pwm5_pf_pin: pwm5-pf-pin {
+				pins = "PF6";
+				function = "pwm5";
+			};
+
+			/omit-if-no-ref/
+			pwm5_pg_pin: pwm5-pg-pin {
+				pins = "PG4";
+				function = "pwm5";
+			};
+
+			/omit-if-no-ref/
+			pwm6_pd_pin: pwm6-pd-pin {
+				pins = "PD9";
+				function = "pwm6";
+			};
+
+			/omit-if-no-ref/
+			pwm6_pf_pin: pwm6-pf-pin {
+				pins = "PF4";
+				function = "pwm6";
+			};
+
+			/omit-if-no-ref/
+			pwm6_pg_pin: pwm6-pg-pin {
+				pins = "PG1";
+				function = "pwm6";
+			};
+
+			/omit-if-no-ref/
+			pwm7_pd_pin: pwm7-pd-pin {
+				pins = "PD22";
+				function = "pwm7";
+			};
+
+			/omit-if-no-ref/
+			pwm7_pg_pin: pwm7-pg-pin {
+				pins = "PG0";
+				function = "pwm7";
+			};
+
+		};
+
+		pwm: pwm@2000c00 {
+			compatible = "allwinner,sun20i-d1-pwm";
+			reg = <0x02000c00 0x400>;
+			clocks = <&ccu CLK_BUS_PWM>,
+				 <&dcxo>,
+				 <&ccu CLK_APB0>;
+			clock-names = "bus", "hosc", "apb";
+			resets = <&ccu RST_BUS_PWM>;
+			status = "disabled";
+			#pwm-cells = <0x3>;
+			allwinner,npwms = <8>;
 		};
 
 		ccu: clock-controller@2001000 {
@@ -204,6 +420,21 @@
 			#reset-cells = <1>;
 		};
 
+		ledc: led-controller@2008000 {
+			compatible = "allwinner,sun20i-d1-ledc",
+				     "allwinner,sun50i-a100-ledc";
+			reg = <0x2008000 0x400>;
+			interrupts = <SOC_PERIPHERAL_IRQ(20) IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&ccu CLK_BUS_LEDC>, <&ccu CLK_LEDC>;
+			clock-names = "bus", "mod";
+			resets = <&ccu RST_BUS_LEDC>;
+			dmas = <&dma 42>;
+			dma-names = "tx";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+		};
+
 		gpadc: adc@2009000 {
 			compatible = "allwinner,sun20i-d1-gpadc";
 			reg = <0x2009000 0x400>;
@@ -212,6 +443,26 @@
 			interrupts = <SOC_PERIPHERAL_IRQ(57) IRQ_TYPE_LEVEL_HIGH>;
 			status = "disabled";
 			#io-channel-cells = <1>;
+		};
+
+		ths: thermal-sensor@2009400 {
+			compatible = "allwinner,sun20i-d1-ths";
+			reg = <0x2009400 0x400>;
+			interrupts = <SOC_PERIPHERAL_IRQ(58) IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&ccu CLK_BUS_THS>;
+			clock-names = "bus";
+			resets = <&ccu RST_BUS_THS>;
+			nvmem-cells = <&ths_calibration>;
+			nvmem-cell-names = "calibration";
+			#thermal-sensor-cells = <0>;
+		};
+
+		iommu: iommu@2010000 {
+			compatible = "allwinner,sun20i-d1-iommu";
+			reg = <0x2010000 0x10000>;
+			interrupts = <SOC_PERIPHERAL_IRQ(64) IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&ccu CLK_BUS_IOMMU>;
+			#iommu-cells = <1>;
 		};
 
 		dmic: dmic@2031000 {
@@ -474,6 +725,10 @@
 			reg = <0x3006000 0x1000>;
 			#address-cells = <1>;
 			#size-cells = <1>;
+
+			ths_calibration: thermal-sensor-calibration@14 {
+				reg = <0x14 0x8>;
+			};
 		};
 
 		crypto: crypto@3040000 {
@@ -752,6 +1007,17 @@
 			};
 		};
 
+		g2d: g2d@5410000 {
+			compatible = "allwinner,sunxi-g2d";
+			reg = <0x5410000 0x40000>;
+			interrupts = <SOC_PERIPHERAL_IRQ(89) IRQ_TYPE_LEVEL_HIGH>; /* 121 - 32 */
+			clocks = <&ccu CLK_BUS_G2D>, <&ccu CLK_G2D>, <&ccu CLK_MBUS_G2D>;
+			clock-names = "bus", "mod", "ram";
+			resets = <&ccu RST_BUS_G2D>;
+			iommus = <&iommu 3>; // G2D master 3 
+			status = "okay";
+		};
+
 		dsi: dsi@5450000 {
 			compatible = "allwinner,sun20i-d1-mipi-dsi",
 				     "allwinner,sun50i-a100-mipi-dsi";
@@ -876,6 +1142,8 @@
 			resets = <&ccu RST_BUS_TCON_LCD0>,
 				 <&ccu RST_BUS_LVDS0>;
 			reset-names = "lcd", "lvds";
+			phys = <&dphy>;
+			phy-names = "combo-phy";
 			#clock-cells = <0>;
 
 			ports {

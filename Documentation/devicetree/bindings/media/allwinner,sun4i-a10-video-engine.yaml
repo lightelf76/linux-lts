@@ -73,6 +73,9 @@ properties:
   interconnect-names:
     const: dma-mem
 
+  power-domains:
+    maxItems: 1
+
 required:
   - compatible
   - reg
@@ -80,7 +83,6 @@ required:
   - clocks
   - clock-names
   - resets
-  - allwinner,sram
 
 additionalProperties: false
 
