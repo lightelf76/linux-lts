@@ -1,48 +1,50 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2021-2023 Samuel Holland <samuel@sholland.org>
+ * Copyright (C) 2021-2023 Samuel Holland
  *
  * Partly based on drivers/leds/leds-turris-omnia.c, which is:
- *     Copyright (c) 2020 by Marek Behún <kabel@kernel.org>
+ * Copyright (c) 2020 by Marek Behún
  */
 
-#include <linux/bitfield.h>
+#include <linux/cdev.h>
 #include <linux/clk.h>
-#include <linux/delay.h>
-#include <linux/dma-mapping.h>
 #include <linux/dmaengine.h>
-#include <linux/interrupt.h>
+#include <linux/fs.h>
 #include <linux/io.h>
-#include <linux/led-class-multicolor.h>
-#include <linux/leds.h>
-#include <linux/mod_devicetable.h>
 #include <linux/module.h>
+#include <linux/of.h>
 #include <linux/platform_device.h>
-#include <linux/pm.h>
-#include <linux/property.h>
 #include <linux/reset.h>
+#include <linux/slab.h>
 #include <linux/spinlock.h>
+#include <linux/uaccess.h>
 
 #define LEDC_CTRL_REG			0x0000
-#define LEDC_CTRL_REG_DATA_LENGTH		GENMASK(28, 16)
-#define LEDC_CTRL_REG_RGB_MODE			GENMASK(8, 6)
-#define LEDC_CTRL_REG_LEDC_EN			BIT(0)
+#define LEDC_CTRL_REG_DATA_LENGTH	GENMASK(28, 16)
+#define LEDC_CTRL_REG_RGB_MODE		GENMASK(8, 6)
+#define LEDC_CTRL_REG_LEDC_EN		BIT(0)
+
 #define LEDC_T01_TIMING_CTRL_REG	0x0004
-#define LEDC_T01_TIMING_CTRL_REG_T1H		GENMASK(26, 21)
-#define LEDC_T01_TIMING_CTRL_REG_T1L		GENMASK(20, 16)
-#define LEDC_T01_TIMING_CTRL_REG_T0H		GENMASK(10, 6)
-#define LEDC_T01_TIMING_CTRL_REG_T0L		GENMASK(5, 0)
+#define LEDC_T01_TIMING_CTRL_REG_T1H	GENMASK(26, 21)
+#define LEDC_T01_TIMING_CTRL_REG_T1L	GENMASK(20, 16)
+#define LEDC_T01_TIMING_CTRL_REG_T0H	GENMASK(10, 6)
+#define LEDC_T01_TIMING_CTRL_REG_T0L	GENMASK(5, 0)
+
 #define LEDC_RESET_TIMING_CTRL_REG	0x000c
 #define LEDC_RESET_TIMING_CTRL_REG_TR		GENMASK(28, 16)
 #define LEDC_RESET_TIMING_CTRL_REG_LED_NUM	GENMASK(9, 0)
+
 #define LEDC_DATA_REG			0x0014
+
 #define LEDC_DMA_CTRL_REG		0x0018
-#define LEDC_DMA_CTRL_REG_DMA_EN		BIT(5)
+#define LEDC_DMA_CTRL_REG_DMA_EN	BIT(5)
 #define LEDC_DMA_CTRL_REG_FIFO_TRIG_LEVEL	GENMASK(4, 0)
+
 #define LEDC_INT_CTRL_REG		0x001c
 #define LEDC_INT_CTRL_REG_GLOBAL_INT_EN		BIT(5)
 #define LEDC_INT_CTRL_REG_FIFO_CPUREQ_INT_EN	BIT(1)
 #define LEDC_INT_CTRL_REG_TRANS_FINISH_INT_EN	BIT(0)
+
 #define LEDC_INT_STS_REG		0x0020
 #define LEDC_INT_STS_REG_FIFO_WLW		GENMASK(15, 10)
 #define LEDC_INT_STS_REG_FIFO_CPUREQ_INT	BIT(1)
@@ -52,15 +54,8 @@
 #define LEDC_MAX_LEDS			1024
 #define LEDC_CHANNELS_PER_LED		3 /* RGB */
 
+/* Каждый светодиод кодируется одним 32-битным словом (младшие 24 бита) */
 #define LEDS_TO_BYTES(n)		((n) * sizeof(u32))
-
-struct sun50i_a100_ledc_led {
-	struct led_classdev_mc mc_cdev;
-	struct mc_subled subled_info[LEDC_CHANNELS_PER_LED];
-	u32 addr;
-};
-
-#define to_ledc_led(mc) container_of(mc, struct sun50i_a100_ledc_led, mc_cdev)
 
 struct sun50i_a100_ledc_timing {
 	u32 t0h_ns;
@@ -76,23 +71,24 @@ struct sun50i_a100_ledc {
 	struct clk *bus_clk;
 	struct clk *mod_clk;
 	struct reset_control *reset;
-
 	u32 *buffer;
 	struct dma_chan *dma_chan;
 	dma_addr_t dma_handle;
 	unsigned int pio_length;
 	unsigned int pio_offset;
-
 	spinlock_t lock;
 	unsigned int next_length;
 	bool xfer_active;
-
 	u32 format;
 	struct sun50i_a100_ledc_timing timing;
+	u32 max_addr;		/* последнее использованное количество светодиодов - 1 */
+	u32 num_leds;		/* последнее использованное количество светодиодов */
 
-	u32 max_addr;
-	u32 num_leds;
-	struct sun50i_a100_ledc_led leds[] __counted_by(num_leds);
+	/* символьное устройство */
+	struct cdev cdev;
+	dev_t devt;
+	struct class *class;
+	struct device *dev_node;
 };
 
 static int sun50i_a100_ledc_dma_xfer(struct sun50i_a100_ledc *priv, unsigned int length)
@@ -110,7 +106,6 @@ static int sun50i_a100_ledc_dma_xfer(struct sun50i_a100_ledc *priv, unsigned int
 		return -EIO;
 
 	dma_async_issue_pending(priv->dma_chan);
-
 	return 0;
 }
 
@@ -121,14 +116,12 @@ static void sun50i_a100_ledc_pio_xfer(struct sun50i_a100_ledc *priv, unsigned in
 
 	length = priv->pio_length;
 	offset = priv->pio_offset;
-	burst  = min(length, LEDC_FIFO_DEPTH - fifo_used);
-
+	burst = min(length, LEDC_FIFO_DEPTH - fifo_used);
 	iowrite32_rep(priv->base + LEDC_DATA_REG, priv->buffer + offset, burst);
 
 	if (burst < length) {
 		priv->pio_length = length - burst;
 		priv->pio_offset = offset + burst;
-
 		if (!offset) {
 			control = readl(priv->base + LEDC_INT_CTRL_REG);
 			control |= LEDC_INT_CTRL_REG_FIFO_CPUREQ_INT_EN;
@@ -173,7 +166,6 @@ static void sun50i_a100_ledc_start_xfer(struct sun50i_a100_ledc *priv, unsigned 
 
 		priv->pio_length = length;
 		priv->pio_offset = 0;
-
 		sun50i_a100_ledc_pio_xfer(priv, fifo_used);
 	}
 }
@@ -189,14 +181,12 @@ static irqreturn_t sun50i_a100_ledc_irq(int irq, void *data)
 		unsigned int next_length;
 
 		spin_lock(&priv->lock);
-
 		/* If another transfer is queued, dequeue and start it. */
 		next_length = priv->next_length;
 		if (next_length)
 			priv->next_length = 0;
 		else
 			priv->xfer_active = false;
-
 		spin_unlock(&priv->lock);
 
 		if (next_length)
@@ -212,38 +202,6 @@ static irqreturn_t sun50i_a100_ledc_irq(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
-static void sun50i_a100_ledc_brightness_set(struct led_classdev *cdev,
-					    enum led_brightness brightness)
-{
-	struct sun50i_a100_ledc *priv = dev_get_drvdata(cdev->dev->parent);
-	struct led_classdev_mc *mc_cdev = lcdev_to_mccdev(cdev);
-	struct sun50i_a100_ledc_led *led = to_ledc_led(mc_cdev);
-	unsigned int next_length;
-	unsigned long flags;
-	bool xfer_active;
-
-	led_mc_calc_color_components(mc_cdev, brightness);
-
-	priv->buffer[led->addr] = led->subled_info[0].brightness << 16 |
-				  led->subled_info[1].brightness <<  8 |
-				  led->subled_info[2].brightness;
-
-	spin_lock_irqsave(&priv->lock, flags);
-
-	/* Start, enqueue, or extend an enqueued transfer, as appropriate. */
-	next_length = max(priv->next_length, led->addr + 1);
-	xfer_active = priv->xfer_active;
-	if (xfer_active)
-		priv->next_length = next_length;
-	else
-		priv->xfer_active = true;
-
-	spin_unlock_irqrestore(&priv->lock, flags);
-
-	if (!xfer_active)
-		sun50i_a100_ledc_start_xfer(priv, next_length);
-}
-
 static const char *const sun50i_a100_ledc_formats[] = {
 	"rgb", "rbg", "grb", "gbr", "brg", "bgr",
 };
@@ -255,8 +213,8 @@ static int sun50i_a100_ledc_parse_format(struct device *dev,
 	int i;
 
 	device_property_read_string(dev, "allwinner,pixel-format", &format);
-
-	i = match_string(sun50i_a100_ledc_formats, ARRAY_SIZE(sun50i_a100_ledc_formats), format);
+	i = match_string(sun50i_a100_ledc_formats, ARRAY_SIZE(sun50i_a100_ledc_formats),
+			 format);
 	if (i < 0)
 		return dev_err_probe(dev, i, "Bad pixel format '%s'\n", format);
 
@@ -288,7 +246,6 @@ static int sun50i_a100_ledc_parse_timing(struct device *dev,
 	struct sun50i_a100_ledc_timing *timing = &priv->timing;
 
 	*timing = sun50i_a100_ledc_default_timing;
-
 	device_property_read_u32(dev, "allwinner,t0h-ns", &timing->t0h_ns);
 	device_property_read_u32(dev, "allwinner,t0l-ns", &timing->t0l_ns);
 	device_property_read_u32(dev, "allwinner,t1h-ns", &timing->t1h_ns);
@@ -309,14 +266,18 @@ static void sun50i_a100_ledc_set_timing(struct sun50i_a100_ledc *priv)
 		return;
 
 	cycle_ns = NSEC_PER_SEC / mod_freq;
+
 	control = FIELD_PREP(LEDC_T01_TIMING_CTRL_REG_T1H, timing->t1h_ns / cycle_ns) |
 		  FIELD_PREP(LEDC_T01_TIMING_CTRL_REG_T1L, timing->t1l_ns / cycle_ns) |
 		  FIELD_PREP(LEDC_T01_TIMING_CTRL_REG_T0H, timing->t0h_ns / cycle_ns) |
 		  FIELD_PREP(LEDC_T01_TIMING_CTRL_REG_T0L, timing->t0l_ns / cycle_ns);
 	writel(control, priv->base + LEDC_T01_TIMING_CTRL_REG);
 
-	control = FIELD_PREP(LEDC_RESET_TIMING_CTRL_REG_TR, timing->treset_ns / cycle_ns) |
-		  FIELD_PREP(LEDC_RESET_TIMING_CTRL_REG_LED_NUM, priv->max_addr);
+	/*
+	 * LED_NUM теперь устанавливается динамически в ledc_write().
+	 * Здесь настраиваем только время сброса (TR).
+	 */
+	control = FIELD_PREP(LEDC_RESET_TIMING_CTRL_REG_TR, timing->treset_ns / cycle_ns);
 	writel(control, priv->base + LEDC_RESET_TIMING_CTRL_REG);
 }
 
@@ -340,6 +301,14 @@ static int sun50i_a100_ledc_resume(struct device *dev)
 	sun50i_a100_ledc_set_format(priv);
 	sun50i_a100_ledc_set_timing(priv);
 
+	/* Восстанавливаем количество светодиодов, если оно уже было установлено */
+	if (priv->num_leds) {
+		u32 val = readl(priv->base + LEDC_RESET_TIMING_CTRL_REG);
+		val &= ~LEDC_RESET_TIMING_CTRL_REG_LED_NUM;
+		val |= FIELD_PREP(LEDC_RESET_TIMING_CTRL_REG_LED_NUM, priv->max_addr);
+		writel(val, priv->base + LEDC_RESET_TIMING_CTRL_REG);
+	}
+
 	writel(LEDC_INT_CTRL_REG_GLOBAL_INT_EN | LEDC_INT_CTRL_REG_TRANS_FINISH_INT_EN,
 	       priv->base + LEDC_INT_CTRL_REG);
 
@@ -349,7 +318,6 @@ err_disable_bus_clk:
 	clk_disable_unprepare(priv->bus_clk);
 err_assert_reset:
 	reset_control_assert(priv->reset);
-
 	return ret;
 }
 
@@ -365,6 +333,7 @@ static int sun50i_a100_ledc_suspend(struct device *dev)
 		spin_lock_irqsave(&priv->lock, flags);
 		xfer_active = priv->xfer_active;
 		spin_unlock_irqrestore(&priv->lock, flags);
+
 		if (!xfer_active)
 			break;
 
@@ -385,48 +354,97 @@ static void sun50i_a100_ledc_dma_cleanup(void *data)
 	dma_release_channel(priv->dma_chan);
 }
 
+/* ---------- Символьное устройство /dev/ledc ---------- */
+
+static int ledc_open(struct inode *inode, struct file *file)
+{
+	struct sun50i_a100_ledc *priv = container_of(inode->i_cdev,
+						     struct sun50i_a100_ledc, cdev);
+	file->private_data = priv;
+	return 0;
+}
+
+static int ledc_release(struct inode *inode, struct file *file)
+{
+	return 0;
+}
+
+static ssize_t ledc_write(struct file *file, const char __user *buf,
+			  size_t count, loff_t *ppos)
+{
+	struct sun50i_a100_ledc *priv = file->private_data;
+	size_t bytes_per_led = sizeof(u32); /* 4 байта на светодиод (24 бита данных + выравнивание) */
+	size_t max_bytes = LEDC_MAX_LEDS * bytes_per_led;
+	unsigned int num_leds;
+	unsigned long flags;
+	unsigned int next_length;
+	bool xfer_active;
+
+	if (count == 0 || count % bytes_per_led != 0)
+		return -EINVAL;
+
+	if (count > max_bytes)
+		return -EFBIG;
+
+	num_leds = count / bytes_per_led;
+
+	if (copy_from_user(priv->buffer, buf, count))
+		return -EFAULT;
+
+	/*
+	 * Обновляем количество светодиодов в регистре сброса.
+	 * LEDC ожидает значение (num_leds - 1).
+	 */
+	priv->num_leds = num_leds;
+	priv->max_addr = num_leds - 1;
+
+	{
+		u32 val = readl(priv->base + LEDC_RESET_TIMING_CTRL_REG);
+		val &= ~LEDC_RESET_TIMING_CTRL_REG_LED_NUM;
+		val |= FIELD_PREP(LEDC_RESET_TIMING_CTRL_REG_LED_NUM, priv->max_addr);
+		writel(val, priv->base + LEDC_RESET_TIMING_CTRL_REG);
+	}
+
+	spin_lock_irqsave(&priv->lock, flags);
+
+	next_length = max(priv->next_length, num_leds);
+	xfer_active = priv->xfer_active;
+
+	if (xfer_active)
+		priv->next_length = next_length;
+	else
+		priv->xfer_active = true;
+
+	spin_unlock_irqrestore(&priv->lock, flags);
+
+	if (!xfer_active)
+		sun50i_a100_ledc_start_xfer(priv, next_length);
+
+	return count;
+}
+
+static const struct file_operations ledc_fops = {
+	.owner   = THIS_MODULE,
+	.open    = ledc_open,
+	.write   = ledc_write,
+	.release = ledc_release,
+};
+
+/* ---------- Probe / Remove ---------- */
+
 static int sun50i_a100_ledc_probe(struct platform_device *pdev)
 {
 	struct dma_slave_config dma_cfg = {};
-	struct led_init_data init_data = {};
-	struct sun50i_a100_ledc_led *led;
 	struct device *dev = &pdev->dev;
 	struct sun50i_a100_ledc *priv;
 	struct resource *mem;
-	u32 max_addr = 0;
-	u32 num_leds = 0;
 	int irq, ret;
 
-	/*
-	 * The maximum LED address must be known in sun50i_a100_ledc_resume() before
-	 * class device registration, so parse and validate the subnodes up front.
-	 */
-	device_for_each_child_node_scoped(dev, child) {
-		u32 addr, color;
-
-		ret = fwnode_property_read_u32(child, "reg", &addr);
-		if (ret || addr >= LEDC_MAX_LEDS)
-			return dev_err_probe(dev, -EINVAL, "'reg' must be between 0 and %d\n",
-					     LEDC_MAX_LEDS - 1);
-
-		ret = fwnode_property_read_u32(child, "color", &color);
-		if (ret || color != LED_COLOR_ID_RGB)
-			return dev_err_probe(dev, -EINVAL, "'color' must be LED_COLOR_ID_RGB\n");
-
-		max_addr = max(max_addr, addr);
-		num_leds++;
-	}
-
-	if (!num_leds)
-		return -ENODEV;
-
-	priv = devm_kzalloc(dev, struct_size(priv, leds, num_leds), GFP_KERNEL);
+	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
 	if (!priv)
 		return -ENOMEM;
 
 	priv->dev = dev;
-	priv->max_addr = max_addr;
-	priv->num_leds = num_leds;
 	spin_lock_init(&priv->lock);
 	dev_set_drvdata(dev, priv);
 
@@ -458,10 +476,9 @@ static int sun50i_a100_ledc_probe(struct platform_device *pdev)
 	if (IS_ERR(priv->dma_chan)) {
 		if (PTR_ERR(priv->dma_chan) != -ENODEV)
 			return PTR_ERR(priv->dma_chan);
-
 		priv->dma_chan = NULL;
-
-		priv->buffer = devm_kzalloc(dev, LEDS_TO_BYTES(LEDC_MAX_LEDS), GFP_KERNEL);
+		priv->buffer = devm_kzalloc(dev, LEDS_TO_BYTES(LEDC_MAX_LEDS),
+					    GFP_KERNEL);
 		if (!priv->buffer)
 			return -ENOMEM;
 	} else {
@@ -469,17 +486,18 @@ static int sun50i_a100_ledc_probe(struct platform_device *pdev)
 		if (ret)
 			return ret;
 
-		dma_cfg.dst_addr	= mem->start + LEDC_DATA_REG;
-		dma_cfg.dst_addr_width	= DMA_SLAVE_BUSWIDTH_4_BYTES;
-		dma_cfg.dst_maxburst	= LEDC_FIFO_DEPTH / 2;
+		dma_cfg.dst_addr = mem->start + LEDC_DATA_REG;
+		dma_cfg.dst_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
+		dma_cfg.dst_maxburst = LEDC_FIFO_DEPTH / 2;
 
 		ret = dmaengine_slave_config(priv->dma_chan, &dma_cfg);
 		if (ret)
 			return ret;
 
 		priv->buffer = dmam_alloc_attrs(dmaengine_get_dma_device(priv->dma_chan),
-						LEDS_TO_BYTES(LEDC_MAX_LEDS), &priv->dma_handle,
-						GFP_KERNEL, DMA_ATTR_WRITE_COMBINE);
+						LEDS_TO_BYTES(LEDC_MAX_LEDS),
+						&priv->dma_handle, GFP_KERNEL,
+						DMA_ATTR_WRITE_COMBINE);
 		if (!priv->buffer)
 			return -ENOMEM;
 	}
@@ -496,53 +514,51 @@ static int sun50i_a100_ledc_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
-	led = priv->leds;
-	device_for_each_child_node_scoped(dev, child) {
-		struct led_classdev *cdev;
+	/* Регистрация символьного устройства */
+	ret = alloc_chrdev_region(&priv->devt, 0, 1, "ledc");
+	if (ret)
+		return ret;
 
-		/* The node was already validated above. */
-		fwnode_property_read_u32(child, "reg", &led->addr);
+	cdev_init(&priv->cdev, &ledc_fops);
+	priv->cdev.owner = THIS_MODULE;
 
-		led->subled_info[0].color_index = LED_COLOR_ID_RED;
-		led->subled_info[0].channel = 0;
-		led->subled_info[1].color_index = LED_COLOR_ID_GREEN;
-		led->subled_info[1].channel = 1;
-		led->subled_info[2].color_index = LED_COLOR_ID_BLUE;
-		led->subled_info[2].channel = 2;
+	ret = cdev_add(&priv->cdev, priv->devt, 1);
+	if (ret)
+		goto err_unregister_chrdev;
 
-		led->mc_cdev.num_colors = ARRAY_SIZE(led->subled_info);
-		led->mc_cdev.subled_info = led->subled_info;
-
-		cdev = &led->mc_cdev.led_cdev;
-		cdev->max_brightness = U8_MAX;
-		cdev->brightness_set = sun50i_a100_ledc_brightness_set;
-
-		init_data.fwnode = child;
-
-		ret = led_classdev_multicolor_register_ext(dev, &led->mc_cdev, &init_data);
-		if (ret) {
-			dev_err_probe(dev, ret, "Failed to register multicolor LED %u", led->addr);
-			while (led-- > priv->leds)
-				led_classdev_multicolor_unregister(&led->mc_cdev);
-			sun50i_a100_ledc_suspend(&pdev->dev);
-
-			return ret;
-		}
-
-		led++;
+	priv->class = class_create("ledc");
+	if (IS_ERR(priv->class)) {
+		ret = PTR_ERR(priv->class);
+		goto err_cdev_del;
 	}
 
-	dev_info(dev, "Registered %u LEDs\n", num_leds);
+	priv->dev_node = device_create(priv->class, NULL, priv->devt, NULL, "ledc");
+	if (IS_ERR(priv->dev_node)) {
+		ret = PTR_ERR(priv->dev_node);
+		goto err_class_destroy;
+	}
 
+	dev_info(dev, "LEDC ready, /dev/ledc (max %u LEDs)\n", LEDC_MAX_LEDS);
 	return 0;
+
+err_class_destroy:
+	class_destroy(priv->class);
+err_cdev_del:
+	cdev_del(&priv->cdev);
+err_unregister_chrdev:
+	unregister_chrdev_region(priv->devt, 1);
+	return ret;
 }
 
 static void sun50i_a100_ledc_remove(struct platform_device *pdev)
 {
 	struct sun50i_a100_ledc *priv = platform_get_drvdata(pdev);
 
-	for (u32 i = 0; i < priv->num_leds; i++)
-		led_classdev_multicolor_unregister(&priv->leds[i].mc_cdev);
+	device_destroy(priv->class, priv->devt);
+	class_destroy(priv->class);
+	cdev_del(&priv->cdev);
+	unregister_chrdev_region(priv->devt, 1);
+
 	sun50i_a100_ledc_suspend(&pdev->dev);
 }
 
@@ -557,13 +573,13 @@ static DEFINE_SIMPLE_DEV_PM_OPS(sun50i_a100_ledc_pm,
 				sun50i_a100_ledc_resume);
 
 static struct platform_driver sun50i_a100_ledc_driver = {
-	.probe		= sun50i_a100_ledc_probe,
-	.remove		= sun50i_a100_ledc_remove,
-	.shutdown	= sun50i_a100_ledc_remove,
-	.driver		= {
-		.name		= "sun50i-a100-ledc",
-		.of_match_table	= sun50i_a100_ledc_of_match,
-		.pm		= pm_ptr(&sun50i_a100_ledc_pm),
+	.probe = sun50i_a100_ledc_probe,
+	.remove = sun50i_a100_ledc_remove,
+	.shutdown = sun50i_a100_ledc_remove,
+	.driver = {
+		.name = "sun50i-a100-ledc",
+		.of_match_table = sun50i_a100_ledc_of_match,
+		.pm = pm_ptr(&sun50i_a100_ledc_pm),
 	},
 };
 module_platform_driver(sun50i_a100_ledc_driver);
