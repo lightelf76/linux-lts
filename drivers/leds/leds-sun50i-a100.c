@@ -8,8 +8,11 @@
 
 #include <linux/cdev.h>
 #include <linux/clk.h>
+#include <linux/delay.h>          /* usleep_range() */
+#include <linux/dma-mapping.h>    /* dmam_alloc_attrs(), DMA_ATTR_WRITE_COMBINE */
 #include <linux/dmaengine.h>
 #include <linux/fs.h>
+#include <linux/interrupt.h>      /* irqreturn_t, IRQ_HANDLED, devm_request_irq() */
 #include <linux/io.h>
 #include <linux/module.h>
 #include <linux/of.h>
@@ -373,7 +376,7 @@ static ssize_t ledc_write(struct file *file, const char __user *buf,
 			  size_t count, loff_t *ppos)
 {
 	struct sun50i_a100_ledc *priv = file->private_data;
-	size_t bytes_per_led = sizeof(u32); /* 4 байта на светодиод (24 бита данных + выравнивание) */
+	size_t bytes_per_led = sizeof(u32); 
 	size_t max_bytes = LEDC_MAX_LEDS * bytes_per_led;
 	unsigned int num_leds;
 	unsigned long flags;
@@ -584,6 +587,7 @@ static struct platform_driver sun50i_a100_ledc_driver = {
 };
 module_platform_driver(sun50i_a100_ledc_driver);
 
+MODULE_ALIAS("platform:sun50i-a100-ledc");
 MODULE_AUTHOR("Samuel Holland <samuel@sholland.org>");
 MODULE_DESCRIPTION("Allwinner A100 LED controller driver");
 MODULE_LICENSE("GPL");
