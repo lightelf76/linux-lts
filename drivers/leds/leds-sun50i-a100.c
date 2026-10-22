@@ -14,7 +14,9 @@
 #include <linux/fs.h>
 #include <linux/interrupt.h>      /* irqreturn_t, IRQ_HANDLED, devm_request_irq() */
 #include <linux/io.h>
+#include <linux/jiffies.h>
 #include <linux/module.h>
+#include <linux/mutex.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/reset.h>
@@ -79,7 +81,7 @@ struct sun50i_a100_ledc {
 	dma_addr_t dma_handle;
 	unsigned int pio_length;
 	unsigned int pio_offset;
-	spinlock_t lock;
+	spinlock_t irq_lock;
 	unsigned int next_length;
 	bool xfer_active;
 	u32 format;
@@ -92,6 +94,7 @@ struct sun50i_a100_ledc {
 	dev_t devt;
 	struct class *class;
 	struct device *dev_node;
+        struct mutex write_lock;   
 };
 
 static int sun50i_a100_ledc_dma_xfer(struct sun50i_a100_ledc *priv, unsigned int length)
@@ -183,14 +186,14 @@ static irqreturn_t sun50i_a100_ledc_irq(int irq, void *data)
 	if (status & LEDC_INT_STS_REG_TRANS_FINISH_INT) {
 		unsigned int next_length;
 
-		spin_lock(&priv->lock);
+		spin_lock(&priv->irq_lock);
 		/* If another transfer is queued, dequeue and start it. */
 		next_length = priv->next_length;
 		if (next_length)
 			priv->next_length = 0;
 		else
 			priv->xfer_active = false;
-		spin_unlock(&priv->lock);
+		spin_unlock(&priv->irq_lock);
 
 		if (next_length)
 			sun50i_a100_ledc_start_xfer(priv, next_length);
@@ -333,9 +336,9 @@ static int sun50i_a100_ledc_suspend(struct device *dev)
 		unsigned long flags;
 		bool xfer_active;
 
-		spin_lock_irqsave(&priv->lock, flags);
+		spin_lock_irqsave(&priv->irq_lock, flags);
 		xfer_active = priv->xfer_active;
-		spin_unlock_irqrestore(&priv->lock, flags);
+		spin_unlock_irqrestore(&priv->irq_lock, flags);
 
 		if (!xfer_active)
 			break;
@@ -371,7 +374,7 @@ static int ledc_release(struct inode *inode, struct file *file)
 {
 	return 0;
 }
-
+/*
 static ssize_t ledc_write(struct file *file, const char __user *buf,
 			  size_t count, loff_t *ppos)
 {
@@ -394,10 +397,6 @@ static ssize_t ledc_write(struct file *file, const char __user *buf,
 	if (copy_from_user(priv->buffer, buf, count))
 		return -EFAULT;
 
-	/*
-	 * Обновляем количество светодиодов в регистре сброса.
-	 * LEDC ожидает значение (num_leds - 1).
-	 */
 	priv->num_leds = num_leds;
 	priv->max_addr = num_leds - 1;
 
@@ -408,7 +407,7 @@ static ssize_t ledc_write(struct file *file, const char __user *buf,
 		writel(val, priv->base + LEDC_RESET_TIMING_CTRL_REG);
 	}
 
-	spin_lock_irqsave(&priv->lock, flags);
+	spin_lock_irqsave(&priv->irq_lock, flags);
 
 	next_length = max(priv->next_length, num_leds);
 	xfer_active = priv->xfer_active;
@@ -418,14 +417,70 @@ static ssize_t ledc_write(struct file *file, const char __user *buf,
 	else
 		priv->xfer_active = true;
 
-	spin_unlock_irqrestore(&priv->lock, flags);
+	spin_unlock_irqrestore(&priv->irq_lock, flags);
 
 	if (!xfer_active)
 		sun50i_a100_ledc_start_xfer(priv, next_length);
 
 	return count;
 }
+*/
 
+static ssize_t ledc_write(struct file *file, const char __user *buf,
+                          size_t count, loff_t *ppos)
+{
+    struct sun50i_a100_ledc *priv = file->private_data;
+    size_t bytes_per_led = sizeof(u32);
+    size_t max_bytes = LEDC_MAX_LEDS * bytes_per_led;
+    unsigned int num_leds, val;
+
+    if (count == 0 || count % bytes_per_led != 0)
+        return -EINVAL;
+    if (count > max_bytes)
+        return -EFBIG;
+
+    num_leds = count / bytes_per_led;
+
+    /* Сериализуем записи и ждём завершения предыдущей передачи */
+    if (mutex_lock_interruptible(&priv->write_lock))
+        return -ERESTARTSYS;
+
+    /* Ждём, пока предыдущая передача завершится (или таймаут) */
+    {
+        unsigned long timeout = jiffies + msecs_to_jiffies(1000);
+        while (priv->xfer_active) {
+            if (time_after(jiffies, timeout)) {
+                mutex_unlock(&priv->write_lock);
+                return -ETIMEDOUT;
+            }
+            usleep_range(1000, 2000);
+        }
+    }
+
+    if (copy_from_user(priv->buffer, buf, count)) {
+        mutex_unlock(&priv->write_lock);
+        return -EFAULT;
+    }
+
+    /* Синхронизация DMA перед запуском */
+    if (priv->dma_chan)
+        dma_sync_single_for_device(dmaengine_get_dma_device(priv->dma_chan),
+                                   priv->dma_handle, count, DMA_TO_DEVICE);
+
+    priv->num_leds = num_leds;
+    priv->max_addr = num_leds - 1;
+
+    val = readl(priv->base + LEDC_RESET_TIMING_CTRL_REG);
+    val &= ~LEDC_RESET_TIMING_CTRL_REG_LED_NUM;
+    val |= FIELD_PREP(LEDC_RESET_TIMING_CTRL_REG_LED_NUM, priv->max_addr);
+    writel(val, priv->base + LEDC_RESET_TIMING_CTRL_REG);
+
+    priv->xfer_active = true;
+    sun50i_a100_ledc_start_xfer(priv, num_leds);
+
+    mutex_unlock(&priv->write_lock);
+    return count;
+}
 static const struct file_operations ledc_fops = {
 	.owner   = THIS_MODULE,
 	.open    = ledc_open,
@@ -448,7 +503,8 @@ static int sun50i_a100_ledc_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	priv->dev = dev;
-	spin_lock_init(&priv->lock);
+	spin_lock_init(&priv->irq_lock);
+	mutex_init(&priv->write_lock);
 	dev_set_drvdata(dev, priv);
 
 	ret = sun50i_a100_ledc_parse_format(dev, priv);
