@@ -720,28 +720,6 @@ static void sun50i_iommu_domain_free(struct iommu_domain *domain)
 
 	kfree(sun50i_domain);
 }
-/*
-static int sun50i_iommu_attach_domain(struct sun50i_iommu *iommu,
-				      struct sun50i_iommu_domain *sun50i_domain)
-{
-        int ret;
-
-	sun50i_domain->dt_dma = dma_map_single(iommu->dev, sun50i_domain->dt,
-					       DT_SIZE, DMA_TO_DEVICE);
-	if (dma_mapping_error(iommu->dev, sun50i_domain->dt_dma)) {
-		dev_err(iommu->dev, "Couldn't map L1 Page Table\n");
-		return -ENOMEM;
-	}
-
-	ret = sun50i_iommu_enable(iommu);
-	if (ret)
-		return ret;
-
-	iommu->domain = &sun50i_domain->domain;
-	sun50i_domain->iommu = iommu;
-	return 0;
-}
-*/
 
 static int sun50i_iommu_attach_domain(struct sun50i_iommu *iommu,
 				      struct sun50i_iommu_domain *sun50i_domain)
