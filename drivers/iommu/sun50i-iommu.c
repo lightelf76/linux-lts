@@ -808,7 +808,6 @@ static int sun50i_iommu_attach_device(struct iommu_domain *domain,
 {
 	struct sun50i_iommu_domain *sun50i_domain = to_sun50i_domain(domain);
 	struct sun50i_iommu *iommu;
-	int ret;
 
 	iommu = sun50i_iommu_from_dev(dev);
 	if (!iommu)
@@ -823,9 +822,7 @@ static int sun50i_iommu_attach_device(struct iommu_domain *domain,
 
 	sun50i_iommu_identity_attach(&sun50i_iommu_identity_domain, dev, old);
 
-	ret = sun50i_iommu_attach_domain(iommu, sun50i_domain);
-
-	return ret;
+	return sun50i_iommu_attach_domain(iommu, sun50i_domain);
 }
 
 static struct iommu_device *sun50i_iommu_probe_device(struct device *dev)
