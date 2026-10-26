@@ -724,8 +724,7 @@ static void sun50i_iommu_domain_free(struct iommu_domain *domain)
 static int sun50i_iommu_attach_domain(struct sun50i_iommu *iommu,
 				      struct sun50i_iommu_domain *sun50i_domain)
 {
-	iommu->domain = &sun50i_domain->domain;
-	sun50i_domain->iommu = iommu;
+        int ret;
 
 	sun50i_domain->dt_dma = dma_map_single(iommu->dev, sun50i_domain->dt,
 					       DT_SIZE, DMA_TO_DEVICE);
@@ -734,7 +733,13 @@ static int sun50i_iommu_attach_domain(struct sun50i_iommu *iommu,
 		return -ENOMEM;
 	}
 
-	return sun50i_iommu_enable(iommu);
+	ret = sun50i_iommu_enable(iommu);
+	if (ret)
+		return ret;
+
+	iommu->domain = &sun50i_domain->domain;
+	sun50i_domain->iommu = iommu;
+	return 0;
 }
 
 static void sun50i_iommu_detach_domain(struct sun50i_iommu *iommu,
@@ -803,6 +808,7 @@ static int sun50i_iommu_attach_device(struct iommu_domain *domain,
 {
 	struct sun50i_iommu_domain *sun50i_domain = to_sun50i_domain(domain);
 	struct sun50i_iommu *iommu;
+	int ret;
 
 	iommu = sun50i_iommu_from_dev(dev);
 	if (!iommu)
@@ -817,9 +823,9 @@ static int sun50i_iommu_attach_device(struct iommu_domain *domain,
 
 	sun50i_iommu_identity_attach(&sun50i_iommu_identity_domain, dev, old);
 
-	sun50i_iommu_attach_domain(iommu, sun50i_domain);
+	ret = sun50i_iommu_attach_domain(iommu, sun50i_domain);
 
-	return 0;
+	return ret;
 }
 
 static struct iommu_device *sun50i_iommu_probe_device(struct device *dev)
