@@ -435,15 +435,13 @@ static int sun50i_iommu_enable(struct sun50i_iommu *iommu)
 	sun50i_domain = to_sun50i_domain(iommu->domain);
 
 	ret = reset_control_deassert(iommu->reset);
-	if (ret) {
-		dev_err(iommu->dev, "failed to deassert reset: %d\n", ret);
+	if (ret)
 		return ret;
-	}
+
 	ret = clk_prepare_enable(iommu->clk);
-	if (ret) {
-		dev_err(iommu->dev, "failed to enable clock: %d\n", ret);
+	if (ret)
 		goto err_reset_assert;
-	}
+
 	spin_lock_irqsave(&iommu->iommu_lock, flags);
 
 	iommu_write(iommu, IOMMU_TTB_REG, sun50i_domain->dt_dma);
@@ -489,7 +487,6 @@ static int sun50i_iommu_enable(struct sun50i_iommu *iommu)
 	ret = sun50i_iommu_flush_all_tlb(iommu);
 	if (ret) {
 		spin_unlock_irqrestore(&iommu->iommu_lock, flags);
-		dev_err(iommu->dev, "TLB flush failed: %d\n", ret);
 		goto err_clk_disable;
 	}
 
@@ -805,7 +802,6 @@ static int sun50i_iommu_attach_domain(struct sun50i_iommu *iommu,
 		sun50i_domain->iommu = NULL;
 		dma_unmap_single(iommu->dev, sun50i_domain->dt_dma,
 				 DT_SIZE, DMA_TO_DEVICE);
-		dev_err(iommu->dev, "sun50i_iommu_enable failed: %d\n", ret);
 		return ret;
 	}
 
